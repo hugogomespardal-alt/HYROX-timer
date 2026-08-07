@@ -1,0 +1,9 @@
+Nome;Dorsal;Prova;Genero;Categoria;Vaga;Hora;Pista;Observacoes
+Ana Marques;101;Individual Feminino PRO;F;PRO;Vaga 1 — 09:00;09:00;1;
+Rita Sousa;102;Individual Feminino PRO;F;PRO;Vaga 1 — 09:00;09:00;2;
+Sofia Nunes;111;Individual Feminino HALF;F;HALF;Vaga 1 — 09:00;09:00;3;
+Carla Dias;112;Individual Feminino HALF;F;HALF;Vaga 2 — 09:20;09:20;1;
+Bruno Lima;201;Individual Masculino PRO;M;PRO;Vaga 1 — 09:00;09:00;4;Atleta convidado
+Joao Guerra;202;Individual Masculino PRO;M;PRO;Vaga 2 — 09:20;09:20;2;
+Rafael Costa;211;Individual Masculino HALF;M;HALF;Vaga 2 — 09:20;09:20;3;
+Filipe Cruz;212;Individual Masculino HALF;M;HALF;Vaga 2 — 09:20;09:20;4;

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1D1D1B">
+<title>HYROX Simulation Timer — CrossFit Viseu</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="tapflash"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <img class="vmark" src="assets/icon_v_white.png" alt="V">
+      <div class="title"><b>HYROX SIMULATION</b><span>CrossFit Viseu · Timer</span></div>
+    </div>
+    <div class="clock tnum" id="clock">00:00:00<small>Relógio geral</small></div>
+    <div class="tb-actions">
+      <button class="icon-btn" id="themeBtn" title="Modo claro/escuro">◐</button>
+    </div>
+  </header>
+
+  <nav class="nav" id="nav"></nav>
+
+  <main class="wrap" id="main"></main>
+
+  <script src="app.js"></script>
+</body>
+</html>

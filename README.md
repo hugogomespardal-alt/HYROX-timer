@@ -132,8 +132,9 @@ sincronização embutida:
 
 1. Cria um projeto em https://supabase.com
 2. Abre o **SQL Editor** e executa o ficheiro **`supabase_sync.sql`** (cria a tabela `sessions`).
-3. Em **Project Settings → API**, copia dois valores: o **Project URL**
-   (`https://xxxx.supabase.co`) e a chave **anon public** (`eyJhbGci…`).
+3. Em **Project Settings → API Keys**, copia dois valores: o **Project URL**
+   (`https://xxxx.supabase.co`) e a chave **publishable** (`sb_publishable_…`).
+   *(Projetos mais antigos podem mostrar em vez disso a chave **anon public** `eyJhbGci…` — também funciona.)*
 4. Na app, em **Admin → Sincronização entre dispositivos**, cola o URL e a chave,
    escolhe um **Código da sessão** (ex.: `cfv-simulacao-2026`), define o **Papel** do
    dispositivo e clica em **Ligar sincronização**. Usa **Testar ligação** para confirmar.

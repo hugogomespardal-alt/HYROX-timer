@@ -1268,10 +1268,10 @@ function viewAdmin(){
     </div>
 
     <div class="panel" style="margin-top:16px"><h3>Sincronização entre dispositivos (opcional)</h3>
-      <div class="callout" style="margin-bottom:12px">Liga vários dispositivos à mesma prova através do <b>Supabase</b> (grátis). Necessário só para o <b>Cenário B</b>: um ecrã/TV que é um <b>aparelho separado</b> do que cronometra. Para uma TV ligada por cabo ao mesmo computador não precisas disto — usa o separador <b>Placar</b>. Passos: cria um projeto em supabase.com, corre o ficheiro <code>supabase_sync.sql</code> no SQL Editor, e cola aqui o <b>URL</b> e a <b>chave anon</b> (Project Settings → API).</div>
+      <div class="callout" style="margin-bottom:12px">Liga vários dispositivos à mesma prova através do <b>Supabase</b> (grátis). Necessário só para o <b>Cenário B</b>: um ecrã/TV que é um <b>aparelho separado</b> do que cronometra. Para uma TV ligada por cabo ao mesmo computador não precisas disto — usa o separador <b>Placar</b>. Passos: cria um projeto em supabase.com, corre o ficheiro <code>supabase_sync.sql</code> no SQL Editor, e cola aqui o <b>URL do projeto</b> e a <b>chave publishable</b> (ou anon), em Project Settings → API Keys.</div>
       <div class="form-grid">
         <label class="field full"><span>URL do projeto Supabase</span><input type="text" data-cfg="syncUrl" value="${esc(c.syncUrl||'')}" placeholder="https://xxxx.supabase.co"></label>
-        <label class="field full"><span>Chave anon (public)</span><input type="text" data-cfg="syncKey" value="${esc(c.syncKey||'')}" placeholder="eyJhbGciOi…"></label>
+        <label class="field full"><span>Chave pública (publishable ou anon)</span><input type="text" data-cfg="syncKey" value="${esc(c.syncKey||'')}" placeholder="sb_publishable_… ou eyJhbGci…"></label>
         <label class="field"><span>Código da sessão</span><input type="text" data-cfg="syncSession" value="${esc(c.syncSession||'')}" placeholder="ex.: cfv-simulacao-2026"></label>
         <label class="field"><span>Papel deste dispositivo</span><select data-cfg="syncRole">
           <option value="writer" ${c.syncRole!=='viewer'?'selected':''}>Escrita (cronometra e envia)</option>
@@ -1873,7 +1873,7 @@ function placarBodyHTML(display){
   }
   return `
     <div class="pl-topbar">
-      <div class="pl-brand"><img src="assets/icon_v_white.png" alt="V"><div><b>HYROX SIMULATION</b><span>CrossFit Viseu · Resultados ao vivo</span></div></div>
+      <div class="pl-brand"><svg class="pl-mark" viewBox="0 0 48 48" role="img" aria-label="CrossFit Viseu"><path d="M4 11 H15 L24 30 L33 11 H44 L29 41 H19 Z" fill="#E9501D"/></svg><div><b>HYROX SIMULATION</b><span>CrossFit Viseu · Resultados ao vivo</span></div></div>
       <span class="pl-clock tnum" id="pl-clock">${fmtClockTime(now())}</span>
     </div>
     ${grid}`;

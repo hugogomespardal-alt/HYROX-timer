@@ -10,7 +10,9 @@
 --  Passos:
 --    1. Cria um projeto grátis em https://supabase.com
 --    2. Abre o SQL Editor e executa este ficheiro.
---    3. Em Project Settings → API, copia o "Project URL" e a chave "anon public".
+--    3. Em Project Settings → API Keys, copia o "Project URL" e a chave
+--       "publishable" (sb_publishable_…). Em projetos antigos pode aparecer
+--       antes a chave "anon public" (eyJ…) — também serve.
 --    4. Na app: Admin → Sincronização entre dispositivos → cola URL e chave,
 --       escolhe um "Código da sessão" (igual em todos os dispositivos) e liga.
 -- ===========================================================================

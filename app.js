@@ -1095,13 +1095,16 @@ function viewReports(){
   return `<div class="toolbar no-print"><label class="field" style="min-width:280px"><span>Atleta</span><select data-f="reportAthlete"><option value="">— escolher —</option>${opts}</select></label></div>${body}`;
 }
 
+const STATION_SHORT={ skierg:'SkiErg', sledpush:'S.Push', sledpull:'S.Pull', burpees:'Burpees', row:'Row', farmers:'Farmers', sandbag:'Lunges', wallballs:'Wall Balls' };
+
 function reportHTML(aid){
   const a=atleta(aid); const sp=computeSplits(a);
   if(sp.bruto==null && progressOf(a)===0) return '<div class="empty">Este atleta ainda não iniciou a prova.</div>';
-  const fr=finalRanking(a.provaId); const frRow=fr.ranked.find(r=>r.a.id===aid);
-  const pos=frRow?frRow.pos:'—';
-  const runRk=sp.st.map((_,i)=>runRanking(a.provaId,i));
-  const stRk=sp.st.map((_,i)=>stationRanking(a.provaId,i));
+  const pid=a.provaId;
+  const fr=finalRanking(pid); const frRow=fr.ranked.find(r=>r.a.id===aid);
+  const posFinal=frRow?frRow.pos:null;
+  const runRk=sp.st.map((_,i)=>runRanking(pid,i));
+  const stRk=sp.st.map((_,i)=>stationRanking(pid,i));
   const runsV=sp.runs.map((v,i)=>({v,i})).filter(x=>x.v!=null);
   const best=runsV.length?runsV.reduce((m,x)=>x.v<m.v?x:m):null;
   const worst=runsV.length?runsV.reduce((m,x)=>x.v>m.v?x:m):null;
@@ -1110,17 +1113,42 @@ function reportHTML(aid){
   const avgAll=runsCount(sp)?runsSum(sp)/runsCount(sp):null;
   const drop=(avg(last4)!=null&&avg(first4)!=null)?avg(last4)-avg(first4):null;
 
+  // rankings de totais (só entram atletas com o segmento completo)
+  const totalRk   = rankBy(pid, x=>officialMs(x));
+  const runsTotRk = rankBy(pid, x=>{const s=computeSplits(x); return runsCount(s)===8?runsSum(s):null;});
+  const stTotRk   = rankBy(pid, x=>{const s=computeSplits(x); return s.stations.filter(v=>v!=null).length===8?stationsSum(s):null;});
+  const pTotal = posOf(totalRk.rows,aid), pRuns=posOf(runsTotRk.rows,aid), pStat=posOf(stTotRk.rows,aid);
+
+  // cartão "big three"
+  const bigCard=(cls,accent,label,timeMs,pos,total)=>{
+    const pct=topPct(pos,total);
+    return `<div class="rc-card ${cls}">
+      <div class="rc-head"><span class="rc-label">${esc(label)}</span>${pos?`<span class="rc-rank">#${pos}<small> de ${total}</small></span>`:''}</div>
+      <div class="rc-time tnum">${fmtDur(timeMs)}</div>
+      ${pct!=null?`<div class="rc-pct" style="color:${accent}">top ${pct}%</div>`:'<div class="rc-pct" style="color:var(--faint)">—</div>'}
+      ${sparkDist(posFrac(pos,total), accent)}
+    </div>`;
+  };
+
+  // radar: corrida + estações (100 = melhor da prova)
+  const radarAxes=[{label:'Corrida', pct:scorePct(pRuns,runsTotRk.total)}]
+    .concat(sp.st.map((k,i)=>({label:STATION_SHORT[k]||STATION_NAME[k], pct:scorePct(posOf(stRk[i].rows,aid), stRk[i].total)})));
+
+  // posição por corrida
+  const racePos=sp.runs.map((v,i)=> v!=null?{i,pos:posOf(runRk[i].rows,aid)}:{i,pos:null});
+
+  // splits (corrida média + estações)
+  const splitRows=[{label:'Corrida (méd/km)', time:avgAll, pos:pRuns, total:runsTotRk.total, accent:'var(--run)'}]
+    .concat(sp.stations.map((v,i)=>({label:STATION_SHORT[sp.st[i]]||STATION_NAME[sp.st[i]], time:v, pos:posOf(stRk[i].rows,aid), total:stRk[i].total, accent:'var(--brand)'})));
+
   // pontos fortes / a melhorar
   const runPos=sp.runs.map((v,i)=> v!=null? {i,pos:posOf(runRk[i].rows,aid),tot:runRk[i].total,type:'Corrida '+(i+1),v}:null).filter(Boolean);
   const stPos=sp.stations.map((v,i)=> v!=null? {i,pos:posOf(stRk[i].rows,aid),tot:stRk[i].total,type:STATION_NAME[sp.st[i]],v}:null).filter(Boolean);
-  const allPos=[...runPos,...stPos];
+  const allPos=[...runPos,...stPos].filter(x=>x.pos);
   const strong=allPos.slice().sort((x,y)=> x.pos/x.tot - y.pos/y.tot).slice(0,3);
   const weak=allPos.slice().sort((x,y)=> y.pos/y.tot - x.pos/x.tot).slice(0,3);
   const aboveRuns=runPos.filter(r=> sp.runs[r.i] < runRk[r.i].avg);
   const belowRuns=runPos.filter(r=> sp.runs[r.i] > runRk[r.i].avg);
-
-  const bestSt=stPos.length?stPos.reduce((m,x)=>x.pos<m.pos?x:m):null;
-  const worstSt=stPos.length?stPos.reduce((m,x)=>x.pos>m.pos?x:m):null;
 
   const runRows=sp.runs.map((v,i)=>{ if(v==null)return''; const rk=runRk[i];
     return `<tr><td>Corrida ${i+1}</td><td class="num">${fmtDur(v)}</td><td class="num">${fmtPace(v)}</td><td class="num">${posOf(rk.rows,aid)}/${rk.total}</td><td class="num">${fmtDur(rk.best)}</td><td class="num">${fmtDur(rk.avg)}</td><td class="num">${fmtSigned(v-rk.best)}</td></tr>`;}).join('');
@@ -1131,19 +1159,31 @@ function reportHTML(aid){
   const weakList=weak.map(s=>`<li><span class="dot"></span>${esc(s.type)} — ${s.pos}º de ${s.tot} (${fmtDur(s.v)})</li>`).join('');
   const penList=penaltiesOf(aid).map(pn=>`<li><span class="dot"></span>${esc(pn.typeLabel)} · ${esc(pn.target)} — ${pn.total}s</li>`).join('');
 
+  const flag = fr.provisional ? `<span class="rp-badge prov">RESULTADO PROVISÓRIO</span>` : `<span class="rp-badge final">RESULTADO FINAL</span>`;
+
   return `<div class="report" id="report-print">
     <div class="rp-hero">
-      <div class="dorsal">${esc(a.dorsal)}</div>
-      <div><div class="lbl">Atleta</div><div style="font-size:26px;font-weight:800">${esc(a.nome)}</div>
-        <div style="color:#c9a99b;font-weight:600">${esc((prova(a.provaId)||{}).name)} · ${esc((vaga(a.vagaId)||{}).nome||'sem vaga')}</div></div>
+      <div class="dorsal">${esc(a.dorsal||'—')}</div>
+      <div class="rp-who"><div class="lbl">Atleta</div><div class="rp-name">${esc(a.nome)}</div>
+        <div class="rp-prova">${esc((prova(pid)||{}).name)} · ${esc((vaga(a.vagaId)||{}).nome||'sem vaga')}</div></div>
       <div style="flex:1"></div>
-      <div style="text-align:right"><div class="lbl">Tempo final oficial</div><div class="big">${fmtDur(officialMs(a))}</div>
-        <div style="color:#c9a99b;font-weight:600">bruto ${fmtDur(sp.bruto)} · penal. ${fmtDur(penaltyTotal(aid))} · ${pos}º de ${fr.classified}</div></div>
+      <div class="rp-final"><div class="lbl">Tempo final oficial</div><div class="big tnum">${fmtDur(officialMs(a))}</div>
+        <div class="rp-sub">${posFinal?posFinal+'º de '+fr.classified:'—'} · bruto ${fmtDur(sp.bruto)} · penal. ${fmtDur(penaltyTotal(aid))}</div>
+        <div style="margin-top:8px">${flag}</div></div>
+    </div>
+
+    <div class="rc-grid">
+      ${bigCard('t-total','var(--brand)','Tempo Total', officialMs(a), pTotal, totalRk.total)}
+      ${bigCard('t-runs','var(--run)','Corridas', runsSum(sp), pRuns, runsTotRk.total)}
+      ${bigCard('t-stat','#6C5CE7','Estações', stationsSum(sp), pStat, stTotRk.total)}
+    </div>
+
+    <div class="two-col">
+      <div class="panel"><h3>Radar de desempenho</h3><div class="hint" style="font-size:11px;color:var(--faint);margin-bottom:6px">Mais para fora = melhor posição na prova.</div>${radarChart(radarAxes)}</div>
+      <div class="panel"><h3>Posição por corrida</h3><div class="hint" style="font-size:11px;color:var(--faint);margin-bottom:6px">Lugar na prova ao longo das 8 corridas (mais alto = melhor).</div>${raceLine(racePos, runRk[0]?runRk[0].total:0)}</div>
     </div>
 
     <div class="kpis">
-      <div class="kpi"><div class="k">Tempo a correr</div><div class="v">${fmtDur(runsSum(sp))}</div><div class="s">8 corridas</div></div>
-      <div class="kpi"><div class="k">Tempo estações</div><div class="v">${fmtDur(stationsSum(sp))}</div><div class="s">8 estações</div></div>
       <div class="kpi"><div class="k">Ritmo médio</div><div class="v">${avgAll!=null?fmtDur(avgAll):'—'}</div><div class="s">min/km</div></div>
       <div class="kpi"><div class="k">Melhor corrida</div><div class="v">${best?fmtDur(best.v):'—'}</div><div class="s">${best?'Corrida '+(best.i+1):''}</div></div>
       <div class="kpi"><div class="k">Corrida + lenta</div><div class="v">${worst?fmtDur(worst.v):'—'}</div><div class="s">${worst?'Corrida '+(worst.i+1):''}</div></div>
@@ -1151,6 +1191,8 @@ function reportHTML(aid){
       <div class="kpi"><div class="k">2.ª metade</div><div class="v">${avg(last4)!=null?fmtDur(avg(last4)):'—'}</div><div class="s">média C5–C8</div></div>
       <div class="kpi"><div class="k">Quebra 2.ª metade</div><div class="v">${drop!=null?fmtSigned(drop):'—'}</div><div class="s">por corrida</div></div>
     </div>
+
+    <div class="panel"><h3>Splits — atleta vs prova</h3><div class="hint" style="font-size:11px;color:var(--faint);margin-bottom:10px">Marcador mais à esquerda = melhor posição na prova.</div>${splitsChart(splitRows)}</div>
 
     <div class="two-col">
       <div class="panel"><h3>Tabela das corridas</h3><div class="tablewrap" style="box-shadow:none;border:0">
@@ -1169,12 +1211,13 @@ function reportHTML(aid){
         ${penList}</ul></div>
     </div>
 
-    ${chartBars('Tempo das 8 corridas (mais baixo = melhor)', sp.runs.map((v,i)=>({label:'C'+(i+1), value:v})), true)}
-    ${chartCompare('Atleta vs média da prova — corridas', sp.runs.map((v,i)=>({label:'C'+(i+1), value:v, avg:runRk[i].avg})))}
-    ${chartCompare('Atleta vs média da prova — estações', sp.stations.map((v,i)=>({label:STATION_NAME[sp.st[i]].split(' ')[0], value:v, avg:stRk[i].avg})))}
-    ${chartDistribution(runsSum(sp), stationsSum(sp), penaltyTotal(aid))}
+    <div class="rp-live no-print">
+      <div><b>Resultados ao vivo</b><span>Partilha com os atletas — horários dos heats e classificações em direto, otimizado para telemóvel.</span></div>
+      <button class="btn primary" data-live-open>Abrir página pública</button>
+      <button class="btn" data-live-link>Copiar link</button>
+    </div>
 
-    <div class="toolbar no-print" style="margin-top:6px">
+    <div class="toolbar no-print" style="margin-top:2px">
       <button class="btn primary" data-pdf="${aid}">Exportar PDF</button>
       <button class="btn" data-repexcel="${aid}">Exportar Excel</button>
       <button class="btn" data-shareimg="${aid}">Imagem de partilha</button>
@@ -1216,6 +1259,94 @@ function chartDistribution(run, station, pen){
   const rects=seg.map(([l,v,c])=>{ const w=(v/total)*barW; const r=`<rect x="${x}" y="30" width="${w}" height="34" fill="${c}"></rect>`; x+=w; return r;}).join('');
   const legend=seg.map(([l,v,c])=>`<span style="display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:12px"><span style="width:12px;height:12px;border-radius:3px;background:${c};display:inline-block"></span>${l}: ${fmtDur(v)} (${Math.round(v/total*100)}%)</span>`).join('');
   return `<div class="chart"><h3>Distribuição do tempo</h3><svg viewBox="0 0 ${W} ${H}" width="100%">${rects}</svg><div style="margin-top:8px">${legend}</div></div>`;
+}
+
+/* ================================================================== *
+ * Relatório estilo HYROX — rankings genéricos, percentis e gráficos
+ * ================================================================== */
+
+/* Ranking genérico por uma função de valor (menor = melhor). */
+function rankBy(pid, valueFn){
+  const rows=[];
+  for(const a of athletesInProva(pid)){
+    if(['DNS','DNF','desclassificado'].includes(a.status)) continue;
+    const v=valueFn(a);
+    if(v!=null && isFinite(v)) rows.push({a, value:v});
+  }
+  rows.sort((x,y)=>x.value-y.value);
+  assignPositions(rows);
+  const vals=rows.map(r=>r.value);
+  const best=vals.length?vals[0]:null;
+  const worst=vals.length?vals[vals.length-1]:null;
+  const avg=vals.length?vals.reduce((s,v)=>s+v,0)/vals.length:null;
+  return {rows,best,worst,avg,total:rows.length};
+}
+/* "top X%" ao estilo HYROX (posição relativa; menor = melhor). */
+function topPct(pos,total){ if(!total||!pos) return null; return Math.max(0.1, Math.round((pos-0.5)/total*1000)/10); }
+/* pontuação 0–100 (100 = melhor da prova) para o radar. */
+function scorePct(pos,total){ if(!total||total<2||!pos) return 100; return Math.round((1-(pos-1)/(total-1))*100); }
+/* fração 0..1 da posição (0 = mais rápido) para os marcadores. */
+function posFrac(pos,total){ if(!total||!pos) return 0.5; return total<2?0.15:(pos-0.5)/total; }
+
+/* Curva de distribuição decorativa com marcador na posição do atleta. */
+function sparkDist(frac, accent){
+  const W=280,H=64,m=8;
+  const pts=[];
+  for(let i=0;i<=44;i++){ const x=i/44; const bell=Math.exp(-Math.pow((x-0.4)*3.0,2)); pts.push([m+x*(W-2*m), H-6-bell*(H-16)]); }
+  const line='M'+pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' L');
+  const area=line+` L${W-m},${H-6} L${m},${H-6} Z`;
+  const mx=m+Math.min(Math.max(frac,0.02),0.98)*(W-2*m);
+  const bx=(mx-m)/(W-2*m); const bell=Math.exp(-Math.pow((bx-0.4)*3.0,2)); const my=H-6-bell*(H-16);
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+    <path d="${area}" fill="${accent}" opacity="0.16"></path>
+    <path d="${line}" fill="none" stroke="${accent}" stroke-width="2"></path>
+    <line x1="${mx.toFixed(1)}" y1="4" x2="${mx.toFixed(1)}" y2="${H-6}" stroke="${accent}" stroke-width="1.4" opacity=".45" stroke-dasharray="3 3"></line>
+    <circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="5" fill="${accent}" stroke="#fff" stroke-width="2"></circle>
+  </svg>`;
+}
+
+/* Radar de desempenho: axes = [{label, pct(0..100)}] (100 = melhor). */
+function radarChart(axes){
+  const N=axes.length; if(!N) return '';
+  const W=360,H=320,cx=W/2,cy=H/2+4,R=Math.min(W,H)/2-52;
+  const pt=(i,r)=>{ const ang=-Math.PI/2 + i*2*Math.PI/N; return [cx+Math.cos(ang)*r, cy+Math.sin(ang)*r]; };
+  let rings='';
+  [0.25,0.5,0.75,1].forEach(f=>{ const p=axes.map((_,i)=>pt(i,R*f).map(n=>n.toFixed(1)).join(',')).join(' '); rings+=`<polygon points="${p}" fill="none" stroke="var(--line)" stroke-width="1"></polygon>`; });
+  let spokes=''; axes.forEach((_,i)=>{ const [x,y]=pt(i,R); spokes+=`<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="1"></line>`; });
+  const poly=axes.map((ax,i)=>pt(i,R*Math.max(0.05,Math.min(1,(ax.pct||0)/100))).map(n=>n.toFixed(1)).join(',')).join(' ');
+  const dots=axes.map((ax,i)=>{ const [x,y]=pt(i,R*Math.max(0.05,Math.min(1,(ax.pct||0)/100))); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="var(--brand)"></circle>`; }).join('');
+  let labels=''; axes.forEach((ax,i)=>{ const [x,y]=pt(i,R+20); const anchor=Math.abs(x-cx)<10?'middle':(x>cx?'start':'end'); labels+=`<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" font-size="10" font-weight="600" fill="var(--muted)">${esc(ax.label)}</text>`; });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%">${rings}${spokes}<polygon points="${poly}" fill="var(--brand)" opacity="0.26" stroke="var(--brand)" stroke-width="2"></polygon>${dots}${labels}</svg>`;
+}
+
+/* Posição por corrida (linha), 1 no topo. positions=[{i,pos}], total atletas. */
+function raceLine(positions,total){
+  const pts=positions.filter(p=>p.pos!=null); if(!pts.length) return '';
+  const W=680,H=200,padL=34,padR=16,padT=18,padB=28,n=8;
+  const maxPos=Math.max(total||1,3);
+  const X=i=>padL+(i/(n-1))*(W-padL-padR);
+  const Y=pos=>padT+((pos-1)/Math.max(1,maxPos-1))*(H-padT-padB);
+  let grid=''; [1,Math.ceil(maxPos/2),maxPos].forEach(p=>{ const y=Y(p).toFixed(1); grid+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="var(--line)" stroke-width="1"></line><text x="6" y="${y}" font-size="10" fill="var(--faint)" dominant-baseline="middle">${p}º</text>`; });
+  let xlabels=''; for(let i=0;i<n;i++){ xlabels+=`<text x="${X(i).toFixed(1)}" y="${H-8}" font-size="10" fill="var(--muted)" text-anchor="middle">C${i+1}</text>`; }
+  const line=pts.map((p,k)=>`${k?'L':'M'}${X(p.i).toFixed(1)},${Y(p.pos).toFixed(1)}`).join(' ');
+  const dots=pts.map(p=>`<circle cx="${X(p.i).toFixed(1)}" cy="${Y(p.pos).toFixed(1)}" r="4" fill="var(--run)" stroke="#fff" stroke-width="1.5"></circle>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%">${grid}${xlabels}<path d="${line}" fill="none" stroke="var(--run)" stroke-width="2.5"></path>${dots}</svg>`;
+}
+
+/* Splits: barras horizontais por disciplina com marcador na posição do atleta. */
+function splitsChart(rows){
+  // rows: [{label, time(ms), pos, total, accent}]
+  const list=rows.filter(r=>r.time!=null); if(!list.length) return '';
+  return `<div class="splits">`+list.map(r=>{
+    const frac=posFrac(r.pos,r.total);
+    const mx=(Math.min(Math.max(frac,0.02),0.98)*100).toFixed(1);
+    const pctTxt=r.total?`${r.pos}º de ${r.total}`:'';
+    return `<div class="split-row">
+      <div class="split-lbl">${esc(r.label)}</div>
+      <div class="split-track"><div class="split-fill" style="width:${mx}%;background:${r.accent}"></div><div class="split-marker" style="left:${mx}%;border-color:${r.accent}"></div></div>
+      <div class="split-val tnum">${fmtDur(r.time)}<span>${pctTxt}</span></div>
+    </div>`;
+  }).join('')+`</div>`;
 }
 
 /* ---- Admin ---- */
@@ -1837,6 +1968,8 @@ let placarCfg = { cols:'auto', rotate:false, rotateIdx:0 };
 let placarMode = false;      // true quando a janela abriu em #placar (ecrã dedicado)
 let placarTimer = null;
 let placarTick = 0;
+let liveMode = false;        // true quando a janela abriu em #live (página pública)
+let liveTab = 'res';         // res | hor
 
 function provaLeaderboard(p, topN){
   const fr=finalRanking(p.id);
@@ -1903,11 +2036,18 @@ function refreshPlacarNow(){
 function startPlacarLoop(){
   if(placarTimer) return;
   placarTimer=setInterval(()=>{
-    const active = placarMode || state.ui.view==='placar';
-    if(!active) return;
-    if(placarMode){ try{ state=load(); }catch(_){} }   // ecrã dedicado apanha alterações de outra janela
-    if(placarCfg.rotate){ placarTick++; if(placarTick%10===0) placarCfg.rotateIdx++; }
-    refreshPlacarNow();
+    const placarActive = placarMode || state.ui.view==='placar';
+    const liveActive = liveMode || state.ui.view==='live';
+    if(!placarActive && !liveActive) return;
+    if(placarMode || liveMode){ try{ state=load(); }catch(_){} }   // ecrã dedicado apanha alterações de outra janela
+    if(placarActive){
+      if(placarCfg.rotate){ placarTick++; if(placarTick%10===0) placarCfg.rotateIdx++; }
+      refreshPlacarNow();
+    }
+    if(liveActive){
+      const lc=document.getElementById('live-clock'); if(lc) lc.textContent=fmtClockTime(now());
+      refreshLiveNow();
+    }
   }, 1000);
 }
 function openPlacarWindow(){
@@ -1939,7 +2079,94 @@ function enterPlacarMode(){
 
 
 
-const NAV=[['central','Central'],['station','Estação'],['vagas','Vagas e Atletas'],['rankings','Classificações'],['placar','Placar'],['reports','Relatórios'],['penalties','Penalizações'],['admin','Admin'],['help','Ajuda']];
+/* ================================================================== *
+ * Página pública para atletas (#live) — horários + resultados ao vivo
+ * Mobile-first, separada do Placar (TV).
+ * ================================================================== */
+function liveViewerLink(){
+  const c=state.config; const base=location.href.split('#')[0].split('?')[0];
+  if(syncActive()){
+    const token=btoa(unescape(encodeURIComponent(JSON.stringify({u:c.syncUrl,k:c.syncKey,s:c.syncSession}))));
+    return base+'?sync='+token+'#live';
+  }
+  return base+'#live';
+}
+
+function liveHeatsHTML(){
+  const vagas=state.vagas.slice().sort((a,b)=>(a.horaPrevista||'').localeCompare(b.horaPrevista||'','pt',{numeric:true}));
+  if(!vagas.length) return '<div class="empty">Ainda não há horários definidos.</div>';
+  return vagas.map(v=>{
+    const ath=v.athletes.map(atleta).filter(Boolean).sort((a,b)=>(a.dorsal||'').localeCompare(b.dorsal||'','pt',{numeric:true}));
+    const started=ath.filter(a=>progressOf(a)>0).length;
+    const rows=ath.map(a=>{ const stt=deriveState(a);
+      return `<div class="lh-row"><span class="lh-dor">${esc(a.dorsal||'—')}</span><span class="lh-name">${esc(a.nome)}<small>${esc((prova(a.provaId)||{}).name||'')}</small></span><span class="badge ${stt}">${esc(STATES[stt]||'')}</span></div>`;
+    }).join('')||'<div class="empty">Sem atletas nesta vaga</div>';
+    return `<div class="live-card">
+      <div class="live-cardhead"><span class="lh-time tnum">${esc(v.horaPrevista||'—')}</span><span class="lh-vname">${esc(v.nome)}</span><span class="lh-count">${started}/${ath.length}</span></div>
+      <div class="lh-list">${rows}</div></div>`;
+  }).join('');
+}
+
+function liveResultsHTML(){
+  if(!state.provas.length) return '<div class="empty">Sem provas.</div>';
+  return state.provas.map(p=>{
+    const fr=finalRanking(p.id); const inProva=athletesInProva(p.id);
+    const finishedIds=new Set(fr.ranked.map(r=>r.a.id));
+    const started=inProva.filter(a=>progressOf(a)>0 && !finishedIds.has(a.id) && !['DNS','DNF','desclassificado'].includes(a.status)).length;
+    const rows=fr.ranked.slice(0,30).map(r=>`<div class="lr-row"><span class="lr-pos ${r.pos<=3?'m'+r.pos:''}">${r.pos}</span><span class="lr-dor">${esc(r.a.dorsal||'')}</span><span class="lr-name">${esc(r.a.nome)}</span><span class="lr-time tnum">${fmtDur(r.value)}</span></div>`).join('')
+      || '<div class="empty">Sem resultados ainda</div>';
+    const flag=fr.classified?(fr.provisional?'<span class="pl-flag prov">● PROVISÓRIO</span>':'<span class="pl-flag final">● FINAL</span>'):'<span class="pl-flag wait">A aguardar</span>';
+    return `<div class="live-card">
+      <div class="live-cardhead brand"><span class="lr-title">${esc(p.name)}</span>${flag}</div>
+      <div class="lr-list">${rows}</div>
+      <div class="live-foot">${fr.classified} classificados${started?` · ${started} em prova`:''} · ${inProva.length} inscritos</div></div>`;
+  }).join('');
+}
+
+function liveBodyHTML(){
+  return `
+    <div class="live-top">
+      <div class="pl-brand"><svg class="pl-mark" viewBox="0 0 48 48" role="img" aria-label="CrossFit Viseu"><path d="M4 11 H15 L24 30 L33 11 H44 L29 41 H19 Z" fill="#E9501D"/></svg><div><b>HYROX SIMULATION</b><span>CrossFit Viseu · Resultados</span></div></div>
+      <span class="live-clock tnum" id="live-clock">${fmtClockTime(now())}</span>
+    </div>
+    <div class="live-tabs">
+      <button class="live-tab ${liveTab==='res'?'on':''}" data-livetab="res">Resultados ao vivo</button>
+      <button class="live-tab ${liveTab==='hor'?'on':''}" data-livetab="hor">Horários dos heats</button>
+    </div>
+    <div class="live-wrap">${liveTab==='hor'?liveHeatsHTML():liveResultsHTML()}</div>
+    <div class="live-note">Atualiza automaticamente${syncActive()?' · ligado à sessão em direto':''}.</div>`;
+}
+
+function refreshLiveNow(){
+  if(liveMode){ const r=document.getElementById('live-root'); if(r) r.innerHTML=liveBodyHTML(); }
+  else { const el=document.getElementById('live-preview'); if(el) el.innerHTML=liveBodyHTML(); }
+}
+function enterLiveMode(){
+  liveMode=true;
+  document.body.classList.add('live-mode');
+  const root=document.createElement('div'); root.id='live-root'; root.className='live-root';
+  root.innerHTML=liveBodyHTML();
+  document.body.appendChild(root);
+}
+
+function viewLive(){
+  const link=liveViewerLink();
+  const warn = syncActive()
+    ? `<div class="callout" style="margin-bottom:12px">Sincronização ligada: este link funciona em <b>qualquer telemóvel</b> dos atletas, mesmo fora da tua rede. Partilha-o (WhatsApp, QR, redes).</div>`
+    : `<div class="callout" style="margin-bottom:12px;border-color:var(--warn,#D97706)">Sem sincronização ligada, este link só funciona <b>neste dispositivo/navegador</b>. Para os atletas verem no telemóvel deles, liga a <b>sincronização</b> em Admin (Supabase) e volta a copiar o link.</div>`;
+  return `
+    <div class="section-head"><h2>Página pública (atletas)</h2><span class="sub">Horários dos heats e resultados ao vivo — otimizado para telemóvel</span></div>
+    <div class="toolbar no-print">
+      <button class="btn primary" data-live-open>⛶ Abrir página pública</button>
+      <button class="btn" data-live-link>Copiar link para partilhar</button>
+      <button class="btn ${liveTab==='res'?'primary':''}" data-livetab="res">Resultados</button>
+      <button class="btn ${liveTab==='hor'?'primary':''}" data-livetab="hor">Horários</button>
+    </div>
+    ${warn}
+    <div class="live-preview" id="live-preview">${liveBodyHTML()}</div>`;
+}
+
+const NAV=[['central','Central'],['station','Estação'],['vagas','Vagas e Atletas'],['rankings','Classificações'],['placar','Placar (TV)'],['live','Público'],['reports','Relatórios'],['penalties','Penalizações'],['admin','Admin'],['help','Ajuda']];
 
 function render(){
   document.documentElement.setAttribute('data-theme', state.config.theme);
@@ -1952,6 +2179,7 @@ function render(){
     case 'vagas': html=viewVagas(); break;
     case 'rankings': html=viewRankings(); break;
     case 'placar': html=viewPlacar(); break;
+    case 'live': html=viewLive(); break;
     case 'reports': html=viewReports(); break;
     case 'penalties': html=viewPenalties(); break;
     case 'admin': html=viewAdmin(); break;
@@ -1977,7 +2205,7 @@ function tick(){
 function on(sel, ev, fn){ document.addEventListener(ev, e=>{ const t=e.target.closest(sel); if(t) fn(t,e); }); }
 
 document.addEventListener('click', e=>{
-  const el=e.target.closest('[data-view],[data-next],[data-undo],[data-report],[data-validate],[data-station],[data-prova],[data-ranksub],[data-startatl],[data-startvaga],[data-newvaga],[data-editvaga],[data-delvaga],[data-newatleta],[data-editatl],[data-addtovaga],[data-newpen],[data-delpen],[data-pdf],[data-repexcel],[data-shareimg],[data-whats],[data-adminlogin],[data-loaddemo],[data-stress],[data-simulate],[data-expall],[data-backup],[data-reset],[data-importcsv-btn],[data-newprova],[data-editprova],[data-newptype],[data-editptype],[data-corrmark],[data-setstate],[data-reopen],[data-runtests],[data-expfinalcsv],[data-theme-toggle],[data-op],[data-placar-open],[data-placar-full],[data-placar-cols],[data-placar-rotate],[data-placar-exit],[data-synctoggle],[data-synctest],[data-synclink]');
+  const el=e.target.closest('[data-view],[data-next],[data-undo],[data-report],[data-validate],[data-station],[data-prova],[data-ranksub],[data-startatl],[data-startvaga],[data-newvaga],[data-editvaga],[data-delvaga],[data-newatleta],[data-editatl],[data-addtovaga],[data-newpen],[data-delpen],[data-pdf],[data-repexcel],[data-shareimg],[data-whats],[data-adminlogin],[data-loaddemo],[data-stress],[data-simulate],[data-expall],[data-backup],[data-reset],[data-importcsv-btn],[data-newprova],[data-editprova],[data-newptype],[data-editptype],[data-corrmark],[data-setstate],[data-reopen],[data-runtests],[data-expfinalcsv],[data-theme-toggle],[data-op],[data-placar-open],[data-placar-full],[data-placar-cols],[data-placar-rotate],[data-placar-exit],[data-synctoggle],[data-synctest],[data-synclink],[data-live-open],[data-live-link],[data-livetab]');
   if(!el) return;
   const A=n=>el.getAttribute(n);
   if(A('data-view')!=null){ state.ui.view=A('data-view'); adminUnlocked = adminUnlocked; persist(); render(); return; }
@@ -2028,6 +2256,14 @@ document.addEventListener('click', e=>{
     else render();
     return; }
   if(A('data-placar-exit')!=null){ location.hash=''; location.reload(); return; }
+  if(A('data-live-open')!=null){ window.open(liveViewerLink(),'hyrox_live'); return; }
+  if(A('data-livetab')!=null){ liveTab=A('data-livetab'); if(state.ui.view==='live'){ render(); } else { refreshLiveNow(); } return; }
+  if(A('data-live-link')!=null){
+    const link=liveViewerLink();
+    try{ navigator.clipboard.writeText(link); toast(syncActive()?'Link público copiado':'Link copiado (só funciona neste dispositivo sem sincronização)', syncActive()?'ok':'info'); }
+    catch(e){ openModal(`<div class="mhead"><h3>Link da página pública</h3><button class="close-x" data-close>×</button></div><div class="mbody"><p class="sub">Copia este endereço e partilha com os atletas:</p><textarea style="min-height:120px">${esc(link)}</textarea></div><div class="mfoot"><button class="btn primary" data-close>Fechar</button></div>`).querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',closeModal)); }
+    return;
+  }
   if(A('data-synctoggle')!=null){
     state.config.syncEnabled=!state.config.syncEnabled;
     if(state.config.syncEnabled && !syncActive()){ toast('Preenche URL, chave e código de sessão','err'); state.config.syncEnabled=false; }
@@ -2070,8 +2306,12 @@ window.addEventListener('storage', e=>{
   if(e.key!==STORE_KEY) return;
   if(placarMode){ try{ state=load(); }catch(_){}
     const r=document.getElementById('placar-root'); if(r) r.innerHTML=placarBodyHTML(true); }
+  else if(liveMode){ try{ state=load(); }catch(_){}
+    const r=document.getElementById('live-root'); if(r) r.innerHTML=liveBodyHTML(); }
   else if(state.ui.view==='placar'){ try{ state=load(); }catch(_){}
     const el=document.getElementById('placar-preview'); if(el) el.innerHTML=placarBodyHTML(false); }
+  else if(state.ui.view==='live'){ try{ state=load(); }catch(_){}
+    const el=document.getElementById('live-preview'); if(el) el.innerHTML=liveBodyHTML(); }
 });
 
 /* ------------------------------------------------------------------ *
@@ -2084,6 +2324,14 @@ function boot(){
     enterPlacarMode();
     startPlacarLoop();
     if(syncActive()) startSync();             // ecrã liga-se ao Supabase (Cenário B)
+    if('serviceWorker' in navigator && location.protocol.startsWith('http')){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+    return;
+  }
+  // Página pública para atletas (#live) — telemóvel, só leitura
+  if(location.hash==='#live'){
+    enterLiveMode();
+    startPlacarLoop();
+    if(syncActive()) startSync();
     if('serviceWorker' in navigator && location.protocol.startsWith('http')){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
     return;
   }
